@@ -1,0 +1,88 @@
+// Prisma schema for InoryTavern (AI Roleplay Tavern)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Character {
+  id           String   @id @default(cuid())
+  name         String
+  avatar       String?
+  description  String
+  personality  String?
+  firstMessage String?
+  systemPrompt String?
+  isNsfw       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  chats        Chat[]
+  worldbookEntries WorldbookEntry[]
+
+  @@index([createdAt])
+}
+
+model Chat {
+  id          String   @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  // 存 JSON 字符串：[ { role, content, ts? }, ... ]
+  messages    String   @default("[]")
+  createdAt   DateTime @default(now())
+
+  @@index([characterId])
+}
+
+model WorldbookEntry {
+  id          String   @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  // 触发关键词，多个用英文逗号分隔
+  keyword     String
+  // 设定内容（被命中时拼接到 systemPrompt）
+  content     String
+  createdAt   DateTime @default(now())
+
+  @@index([characterId])
+}
+
+// 全局设置（单例：id = "global"）
+// 用于动态配置 OpenAI 兼容 API 的 baseUrl / apiKey / 多个 model：
+//   - chatModel:    对话（流式聊天）模型
+//   - generateModel: 智能捏卡（生成角色 JSON）模型
+//   - ttsModel:     语音朗读模型
+// 解决 process.env 硬编码、无法在运行时修改的问题。
+model Setting {
+  id            String @id @default("global")
+  baseUrl       String @default("https://api.openai.com/v1")
+  apiKey        String @default("")
+  chatModel     String @default("gpt-4o-mini")
+  generateModel String @default("gpt-4o-mini")
+  ttsModel      String @default("tts-1")
+  // TTS 自定义 voice 列表（用逗号分隔）
+  // 例如 "zm_yunjian, am_adam, jm_kumo" 表示中英日全用男声
+  // Kokoro 会按语言自动匹配；其他模型用列表第一个
+  ttsVoice      String @default("")
+  // Embedding 模型：用于 RAG 长期记忆向量化
+  embeddingModel String @default("text-embedding-3-small")
+}
+
+// RAG 长期记忆：按 character 维度存储，embedding 以 JSON 字符串存于 SQLite
+// 用纯 JS 余弦相似度检索，避免引入 C++ 编译依赖。
+model Memory {
+  id          String   @id @default(cuid())
+  characterId String
+  // 记忆来源的聊天会话；可选，用于以后做"按会话隔离"
+  chatId      String?
+  // 记忆内容（自然语言文本，比如"用户说他喜欢苹果"）
+  content     String
+  // 向量化后的浮点数组，序列化为 JSON 字符串，例如 "[0.012, -0.034, ...]"
+  embedding   String
+  createdAt   DateTime @default(now())
+
+  @@index([characterId])
+  @@index([createdAt])
+}

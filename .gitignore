@@ -30,8 +30,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (绝对不要提交真实密钥)
+# 忽略所有 .env*，但白名单 .env.example（开发模板，需提交到 GitHub）
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +45,27 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Prisma 本地数据库 & 客户端生成物
+# 重要：用户本地的聊天记录存在 SQLite 文件里，绝不能上传到 GitHub
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/*.db-shm
+/prisma/*.db-wal
+
+# 任何位置出现的 SQLite 数据库文件
+*.sqlite
+*.sqlite3
+*.db
+
+# 系统临时文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
