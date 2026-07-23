@@ -43,6 +43,14 @@ export interface CharacterDTO {
   isNsfw: boolean;
   createdAt: string;
   worldbook?: WorldbookEntryDTO[];
+  // ----- 高级角色设定（参考 SillyTavern） -----
+  userCharacterName?: string | null;
+  playStyle?: "1v1" | "story" | "trpg" | "tool" | string | null;
+  replyMode?: "casual" | "immersive" | "narrator" | string | null;
+  replyLength?: number | null;
+  dialogueExamples?: string | null;
+  scenario?: string | null;
+  replyEnhancement?: "none" | "status" | "frontend-card" | string | null;
 }
 
 export interface SettingDTO {

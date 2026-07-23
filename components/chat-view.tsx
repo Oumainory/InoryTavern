@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Brain,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -24,6 +26,47 @@ import { cn } from "@/lib/utils";
 
 let _idSeq = 0;
 const newId = () => `m_${Date.now()}_${++_idSeq}`;
+
+/**
+ * 把消息正文拆成「思考段 + 文本段」的列表。
+ * 兼容流式输出时 </think> 还没闭合的情况：用 `</think>` 或字符串末尾 作为分界。
+ * 兼容多个 <think> 块交替出现。
+ */
+type Segment = { type: "thinking" | "text"; content: string };
+
+function parseThinking(raw: string): Segment[] {
+  if (!raw) return [];
+  const segs: Segment[] = [];
+  // 用 lastIndex 循环找 <think> 块
+  const re = /<think>([\s\S]*?)(?:<\/think>|$)/g;
+  let lastEnd = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    const start = m.index;
+    // 思考块前的纯文本
+    if (start > lastEnd) {
+      segs.push({ type: "text", content: raw.slice(lastEnd, start) });
+    }
+    segs.push({ type: "thinking", content: m[1] });
+    lastEnd = re.lastIndex;
+  }
+  // 思考块后剩余的纯文本
+  if (lastEnd < raw.length) {
+    segs.push({ type: "text", content: raw.slice(lastEnd) });
+  }
+  return segs;
+}
+
+/** 把思考块里的内容按行去掉空行，做成简短预览 */
+function summarizeThinking(s: string): string {
+  const lines = s
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return "思考中…";
+  const head = lines[0];
+  return head.length > 60 ? head.slice(0, 60) + "…" : head;
+}
 
 export function ChatView({
   character,
@@ -467,7 +510,8 @@ function Bubble({
   // 复制
   const onCopy = async () => {
     try {
-      await navigator.clipboard.writeText(displayContent);
+      // 复制时也去掉思考块，避免把内部思考过程粘出去
+      await navigator.clipboard.writeText(stripThinking(displayContent));
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch {
@@ -483,13 +527,15 @@ function Bubble({
       setSpeaking(false);
       return;
     }
-    if (!displayContent.trim()) return;
+    // 朗读时去掉思考块，只读可见回复
+    const ttsText = stripThinking(displayContent);
+    if (!ttsText.trim()) return;
     setSpeaking(true);
     try {
       const r = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: displayContent }),
+        body: JSON.stringify({ text: ttsText }),
       });
       if (!r.ok) {
         const t = await r.text();
@@ -607,14 +653,7 @@ function Bubble({
           ) : isUser ? (
             displayContent
           ) : (
-            <>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {displayContent || ""}
-              </ReactMarkdown>
-              {isLast && streaming && (
-                <span className="ml-0.5 inline-block w-1.5 h-3.5 align-middle bg-foreground/70 animate-pulse" />
-              )}
-            </>
+            <MessageWithThinking content={displayContent} streaming={isLast && streaming} />
           )}
         </div>
 
@@ -682,5 +721,98 @@ function IconBtn({
     >
       {children}
     </button>
+  );
+}
+
+/** 去掉 <think>...</think> 块（未闭合的也去掉），用于复制 / 朗读 */
+function stripThinking(raw: string): string {
+  if (!raw) return "";
+  return raw
+    .replace(/<think>[\s\S]*?(?:<\/think>|$)/g, "")
+    .trim();
+}
+
+/**
+ * 渲染带思考过程的 AI 消息：把 <think>...</think> 段拆出来作为可折叠块，
+ * 剩余纯文本段交给 ReactMarkdown。
+ */
+function MessageWithThinking({
+  content,
+  streaming,
+}: {
+  content: string;
+  streaming: boolean;
+}) {
+  const segs = useMemo(() => parseThinking(content), [content]);
+  // 没有任何思考块 → 退回原来的 ReactMarkdown
+  if (segs.length === 0 || segs.every((s) => s.type === "text")) {
+    return (
+      <>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {content || ""}
+        </ReactMarkdown>
+        {streaming && (
+          <span className="ml-0.5 inline-block w-1.5 h-3.5 align-middle bg-foreground/70 animate-pulse" />
+        )}
+      </>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {segs.map((seg, idx) =>
+        seg.type === "thinking" ? (
+          <ThinkingBlock key={idx} content={seg.content} streaming={streaming} />
+        ) : seg.content.trim() ? (
+          <ReactMarkdown key={idx} remarkPlugins={[remarkGfm]}>
+            {seg.content}
+          </ReactMarkdown>
+        ) : null
+      )}
+      {streaming && (
+        <span className="ml-0.5 inline-block w-1.5 h-3.5 align-middle bg-foreground/70 animate-pulse" />
+      )}
+    </div>
+  );
+}
+
+/** 可折叠的思考过程块（Monica 风格） */
+function ThinkingBlock({
+  content,
+  streaming,
+}: {
+  content: string;
+  streaming: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  // 流式输出时默认展开（让用户看到思考进展），结束态默认折叠
+  const effectivelyOpen = open || streaming;
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/50 p-3 mb-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
+        aria-expanded={effectivelyOpen}
+      >
+        <Brain className="size-3.5 shrink-0" />
+        <span className="font-medium">思考过程</span>
+        {!effectivelyOpen && (
+          <span className="truncate text-xs opacity-70 max-w-[60%]">
+            {summarizeThinking(content)}
+          </span>
+        )}
+        <ChevronDown
+          className={cn(
+            "ml-auto size-4 shrink-0 transition-transform",
+            effectivelyOpen && "rotate-180"
+          )}
+        />
+      </button>
+      {effectivelyOpen && (
+        <div className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground border-t border-border/40 pt-2">
+          {content}
+        </div>
+      )}
+    </div>
   );
 }

@@ -16,6 +16,14 @@ interface UpdateBody {
   systemPrompt?: string | null;
   isNsfw?: boolean;
   worldbook?: { keyword: string; content: string }[];
+  // ----- 高级角色设定 -----
+  userCharacterName?: string | null;
+  playStyle?: string | null;
+  replyMode?: string | null;
+  replyLength?: number | null;
+  dialogueExamples?: string | null;
+  scenario?: string | null;
+  replyEnhancement?: string | null;
 }
 
 function toDTO(c: {
@@ -28,6 +36,13 @@ function toDTO(c: {
   systemPrompt: string | null;
   isNsfw: boolean;
   createdAt: Date;
+  userCharacterName: string | null;
+  playStyle: string | null;
+  replyMode: string | null;
+  replyLength: number | null;
+  dialogueExamples: string | null;
+  scenario: string | null;
+  replyEnhancement: string | null;
   worldbookEntries: { id: string; keyword: string; content: string }[];
 }): CharacterDTO {
   return {
@@ -40,6 +55,13 @@ function toDTO(c: {
     systemPrompt: c.systemPrompt,
     isNsfw: c.isNsfw,
     createdAt: c.createdAt.toISOString(),
+    userCharacterName: c.userCharacterName,
+    playStyle: c.playStyle,
+    replyMode: c.replyMode,
+    replyLength: c.replyLength,
+    dialogueExamples: c.dialogueExamples,
+    scenario: c.scenario,
+    replyEnhancement: c.replyEnhancement,
     worldbook: c.worldbookEntries.map(
       (w): WorldbookEntryDTO => ({
         id: w.id,
@@ -93,6 +115,24 @@ export async function PUT(req: Request, ctx: Ctx) {
   if (body.systemPrompt !== undefined)
     data.systemPrompt = body.systemPrompt || null;
   if (typeof body.isNsfw === "boolean") data.isNsfw = body.isNsfw;
+  // ----- 高级角色设定 -----
+  if (body.userCharacterName !== undefined)
+    data.userCharacterName = body.userCharacterName || null;
+  if (body.playStyle !== undefined)
+    data.playStyle = body.playStyle || "1v1";
+  if (body.replyMode !== undefined)
+    data.replyMode = body.replyMode || "immersive";
+  if (body.replyLength !== undefined) {
+    data.replyLength =
+      typeof body.replyLength === "number" && body.replyLength > 0
+        ? Math.round(body.replyLength)
+        : 500;
+  }
+  if (body.dialogueExamples !== undefined)
+    data.dialogueExamples = body.dialogueExamples || null;
+  if (body.scenario !== undefined) data.scenario = body.scenario || null;
+  if (body.replyEnhancement !== undefined)
+    data.replyEnhancement = body.replyEnhancement || "none";
 
   // 全量更新 WorldbookEntry：事务里先删旧的，再插新的
   const worldbook = (body.worldbook || [])

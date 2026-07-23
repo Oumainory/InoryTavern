@@ -86,6 +86,63 @@ export async function POST(req: Request) {
     systemParts.push(`【背景描述】\n${character.description}`);
   }
 
+  // ============== 高级角色设定注入（参考 SillyTavern） ==============
+  // 1. 基础信息：场景 + 用户角色名
+  if (character.scenario && character.scenario.trim()) {
+    systemParts.push(`[对话场景]：${character.scenario.trim()}`);
+  }
+  if (character.userCharacterName && character.userCharacterName.trim()) {
+    systemParts.push(
+      `[用户设定]：用户的名字是 ${character.userCharacterName.trim()}，请在对话中使用这个名字称呼用户。`
+    );
+  }
+
+  // 2. 玩法类型（playStyle）—— 决定整体对话走向
+  const playStyleRules: Record<string, string> = {
+    "1v1": "这是一场1v1的对手戏，请专注与用户的互动与情感交流。",
+    story:
+      "这是一场推剧情的对话，请在回复中推动故事发展，描述环境和突发事件。",
+    trpg:
+      "你是一个跑团DM，请引导用户做出选择，并在必要时进行环境描述和结果判定。",
+    tool:
+      "你是一个系统工具，请直接提供有用的信息，不需要进行任何角色扮演或动作描写。",
+  };
+  const playStyleKey = (character.playStyle || "1v1").trim();
+  if (playStyleRules[playStyleKey]) {
+    systemParts.push(`[玩法类型 - ${playStyleKey}]：${playStyleRules[playStyleKey]}`);
+  }
+
+  // 3. 回复模式（replyMode）—— 决定文风与详略
+  const replyModeRules: Record<string, string> = {
+    casual:
+      "请使用轻松的日常聊天口吻，回复尽量简短，像发信息一样，不需要动作描写。",
+    immersive:
+      "请进行沉浸式角色扮演，必须包含丰富的动作、神态和心理描写（建议使用括号包裹描写部分）。",
+    narrator:
+      "请使用全知上帝视角/旁白视角进行描述，不仅描写角色，还要描写周围的环境和其他人物的反应。",
+  };
+  const replyModeKey = (character.replyMode || "immersive").trim();
+  if (replyModeRules[replyModeKey]) {
+    systemParts.push(`[回复模式 - ${replyModeKey}]：${replyModeRules[replyModeKey]}`);
+  }
+
+  // 4. 对话示例 + 回复增强
+  if (character.dialogueExamples && character.dialogueExamples.trim()) {
+    systemParts.push(
+      `[对话示例]（请严格参考以下风格和格式进行回复）：\n${character.dialogueExamples.trim()}`
+    );
+  }
+  const enhancementKey = (character.replyEnhancement || "none").trim();
+  if (enhancementKey === "status") {
+    systemParts.push(
+      "[特殊指令]：请在每次回复的最后，单独换行输出一栏角色的当前状态，格式必须为：【心情：xxx | 好感度：xxx】（你可以根据剧情自行决定数值和状态）。"
+    );
+  } else if (enhancementKey === "frontend-card") {
+    systemParts.push(
+      '[特殊指令]：请在每次回复末尾，输出一段结构化的「前端卡」数据，使用 JSON 代码块包裹，包含以下字段：{"mood": "...", "affection": 0-100, "location": "...", "outfit": "..."}，便于前端渲染。'
+    );
+  }
+
   // 世界书条目：作为附加背景设定注入
   if (matchedEntries.length > 0) {
     const wbLines = matchedEntries
@@ -196,16 +253,41 @@ export async function POST(req: Request) {
     return next;
   }
 
+  // 从角色设定里取 max_tokens（replyLength），空值兜底 500
+  const userMaxTokens =
+    typeof character.replyLength === "number" && character.replyLength > 0
+      ? Math.round(character.replyLength)
+      : 500;
+
+  // 思考型模型（DeepSeek-R1、Qwen QwQ、o1/o3、reasoning 系列）动辄思考上千字，
+  // 如果 max_tokens 还按 replyLength 限制，思考到一半就被掐断，根本出不来正式回复。
+  // 这里启发式识别思考模型，并给它一个 max_tokens 下限（4000）。
+  // 命名规则不保证 100% 准确：把名字里带 r1/qwq/o1/o3/reasoning/thinking 的都当思考模型。
+  const THINKING_MODEL_MIN = 4000;
+  const isThinkingModel = /r1|qwq|o1|o3|reasoning|thinking|deepseek-r|qwen-qwq/i.test(
+    model
+  );
+  const maxTokens = isThinkingModel
+    ? Math.max(userMaxTokens, THINKING_MODEL_MIN)
+    : userMaxTokens;
+
   try {
     const stream = await client.chat.completions.create({
       model,
       messages: finalMessages,
       stream: true,
       temperature: 0.8,
+      max_tokens: maxTokens,
     });
 
     const encoder = new TextEncoder();
+    // assistantFull：包含 <think> 标签，用于持久化到 Chat.messages（前端要渲染折叠）
     let assistantFull = "";
+    // visibleContent：仅可见回复，不含 <think> 块；用于 RAG 记忆入库（防止思考过程污染记忆库）
+    let visibleContent = "";
+    // 思考模型（DeepSeek-R1 / Qwen QwQ / o1 等）会用 reasoning_content 字段单独返回思考过程
+    // 我们用 <think>...</think> 标签包裹，与普通内容一起推给前端
+    let isThinking = false;
 
     // 缓存最近一次有效 chatId：流结束后异步保存时用
     let lastChatId: string | null = chatId || null;
@@ -216,20 +298,55 @@ export async function POST(req: Request) {
       async start(controller) {
         try {
           for await (const chunk of stream) {
-            const delta = chunk.choices?.[0]?.delta?.content || "";
-            if (delta) {
-              assistantFull += delta;
-              controller.enqueue(encoder.encode(delta));
+            const d = chunk.choices?.[0]?.delta as
+              | { content?: string; reasoning_content?: string }
+              | undefined;
+            // 思考内容：仅思考模型才会有
+            const reasoning = d?.reasoning_content || "";
+            // 可见内容
+            const content = d?.content || "";
+
+            if (reasoning) {
+              // 进入思考态：先发开启标签
+              if (!isThinking) {
+                const openTag = "<think>\n";
+                assistantFull += openTag;
+                controller.enqueue(encoder.encode(openTag));
+                isThinking = true;
+              }
+              assistantFull += reasoning;
+              controller.enqueue(encoder.encode(reasoning));
             }
+            if (content) {
+              // 思考态结束：先发关闭标签
+              if (isThinking) {
+                const closeTag = "\n</think>\n";
+                assistantFull += closeTag;
+                controller.enqueue(encoder.encode(closeTag));
+                isThinking = false;
+              }
+              assistantFull += content;
+              visibleContent += content; // 只把可见回复累加到 RAG 入库用的变量
+              controller.enqueue(encoder.encode(content));
+            }
+          }
+          // 流结束时若思考态还开着，补上关闭标签，避免前端解析时拿不到完整块
+          if (isThinking) {
+            const closeTag = "\n</think>\n";
+            assistantFull += closeTag;
+            controller.enqueue(encoder.encode(closeTag));
+            isThinking = false;
           }
           // onFinish：先保存完整 chat 消息，再异步保存 RAG 记忆
           await saveChat(assistantFull);
 
           // ============ RAG 长期记忆自动保存（异步 fire-and-forget） ============
+          // ⚠️ 重要：记忆入库只存 visibleContent，不存 assistantFull
+          // 否则思考过程会被当成 AI 说出的话污染记忆库，AI 以后回忆时会非常混乱
           // 仅在用户发了有效消息时才保存（不保存纯首条 firstMessage）
-          if (lastUserMessage && assistantFull.trim()) {
+          if (lastUserMessage && visibleContent.trim()) {
             const combined =
-              `User: ${lastUserMessage}\nCharacter: ${assistantFull.trim()}`;
+              `User: ${lastUserMessage}\nCharacter: ${visibleContent.trim()}`;
             // 长度 > 20 才入库，避免 "嗯"/"好" 等无意义短句污染记忆库
             if (combined.length > 20) {
               // 拿到最终生效的 chatId（如果原始 chatId 为空，saveChat 里会创建新的）

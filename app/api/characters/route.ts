@@ -22,6 +22,13 @@ export async function GET() {
     systemPrompt: c.systemPrompt,
     isNsfw: c.isNsfw,
     createdAt: c.createdAt.toISOString(),
+    userCharacterName: c.userCharacterName,
+    playStyle: c.playStyle,
+    replyMode: c.replyMode,
+    replyLength: c.replyLength,
+    dialogueExamples: c.dialogueExamples,
+    scenario: c.scenario,
+    replyEnhancement: c.replyEnhancement,
     worldbook: c.worldbookEntries.map(
       (w): WorldbookEntryDTO => ({
         id: w.id,
@@ -61,6 +68,16 @@ export async function POST(req: Request) {
       firstMessage: body.firstMessage || null,
       systemPrompt: body.systemPrompt || null,
       isNsfw: !!body.isNsfw,
+      userCharacterName: body.userCharacterName || null,
+      playStyle: body.playStyle ?? "1v1",
+      replyMode: body.replyMode ?? "immersive",
+      replyLength:
+        typeof body.replyLength === "number" && body.replyLength > 0
+          ? Math.round(body.replyLength)
+          : 500,
+      dialogueExamples: body.dialogueExamples || null,
+      scenario: body.scenario || null,
+      replyEnhancement: body.replyEnhancement ?? "none",
       worldbookEntries: {
         create: worldbook.map((w) => ({
           keyword: w.keyword,
@@ -82,6 +99,13 @@ export async function POST(req: Request) {
       systemPrompt: created.systemPrompt,
       isNsfw: created.isNsfw,
       createdAt: created.createdAt.toISOString(),
+      userCharacterName: created.userCharacterName,
+      playStyle: created.playStyle,
+      replyMode: created.replyMode,
+      replyLength: created.replyLength,
+      dialogueExamples: created.dialogueExamples,
+      scenario: created.scenario,
+      replyEnhancement: created.replyEnhancement,
       worldbook: created.worldbookEntries.map((w) => ({
         id: w.id,
         keyword: w.keyword,

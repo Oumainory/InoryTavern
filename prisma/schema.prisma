@@ -19,7 +19,23 @@ model Character {
   systemPrompt String?
   isNsfw       Boolean  @default(false)
   createdAt    DateTime @default(now())
-  chats        Chat[]
+  // ----- 高级角色设定（参考 SillyTavern） -----
+  // 用户角色名（不展示在聊天中，帮 AI 更好生成对话）
+  userCharacterName String?
+  // 玩法类型：1v1 (对手戏) / story (推剧情) / trpg (文字冒险) / tool (系统工具)
+  playStyle        String? @default("1v1")
+  // 回复模式：casual (轻聊天) / immersive (沉浸式) / narrator (全知视角)
+  replyMode        String? @default("immersive")
+  // AI 回复长度 (max_tokens)
+  replyLength      Int?    @default(500)
+  // 对话示例（教 AI 说话口癖和格式）
+  dialogueExamples String?
+  // 对话场景（故事发生的初始背景）
+  scenario         String?
+  // 回复增强：none (不开启) / status (状态栏) / frontend-card (前端卡)
+  replyEnhancement String? @default("none")
+
+  chats            Chat[]
   worldbookEntries WorldbookEntry[]
 
   @@index([createdAt])

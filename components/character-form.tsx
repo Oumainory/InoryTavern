@@ -11,6 +11,7 @@ import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LinkButton } from "@/components/ui/link-button";
+import { RadioGroup } from "@/components/ui/radio-group";
 import {
   ArrowLeft,
   ImagePlus,
@@ -23,6 +24,7 @@ import {
   Wand2,
   X,
   BookText,
+  Theater,
 } from "lucide-react";
 import type { WorldbookEntryDTO } from "@/lib/types";
 import { readTavernPng, normalizeTavernCard } from "@/lib/png-utils";
@@ -37,6 +39,14 @@ export type CharacterFormInitial = {
   systemPrompt: string | null;
   isNsfw: boolean;
   worldbook: WorldbookEntryDTO[];
+  // ----- 高级角色设定（参考 SillyTavern） -----
+  userCharacterName?: string | null;
+  playStyle?: string | null;
+  replyMode?: string | null;
+  replyLength?: number | null;
+  dialogueExamples?: string | null;
+  scenario?: string | null;
+  replyEnhancement?: string | null;
 };
 
 type WorldbookEntryForm = {
@@ -67,6 +77,14 @@ type FormState = {
   temperature: number;
   topP: number;
   worldbook: WorldbookEntryForm[];
+  // ----- 高级角色设定（参考 SillyTavern） -----
+  userCharacterName: string;
+  playStyle: string;
+  replyMode: string;
+  replyLength: number;
+  dialogueExamples: string;
+  scenario: string;
+  replyEnhancement: string;
 };
 
 const DEFAULTS: FormState = {
@@ -80,6 +98,13 @@ const DEFAULTS: FormState = {
   temperature: 0.8,
   topP: 0.95,
   worldbook: [],
+  userCharacterName: "",
+  playStyle: "1v1",
+  replyMode: "immersive",
+  replyLength: 500,
+  dialogueExamples: "",
+  scenario: "",
+  replyEnhancement: "none",
 };
 
 // 从已存的 systemPrompt 里尽量拆出【采样参数】块（之前创建时拼的）
@@ -167,6 +192,16 @@ export function CharacterForm({
         keyword: w.keyword,
         content: w.content,
       })),
+      userCharacterName: initialData.userCharacterName || "",
+      playStyle: initialData.playStyle || "1v1",
+      replyMode: initialData.replyMode || "immersive",
+      replyLength:
+        typeof initialData.replyLength === "number" && initialData.replyLength > 0
+          ? initialData.replyLength
+          : 500,
+      dialogueExamples: initialData.dialogueExamples || "",
+      scenario: initialData.scenario || "",
+      replyEnhancement: initialData.replyEnhancement || "none",
     };
   });
   const [submitting, setSubmitting] = useState(false);
@@ -361,6 +396,17 @@ export function CharacterForm({
         systemPrompt: sys || null,
         isNsfw: form.isNsfw,
         worldbook,
+        // ----- 高级角色设定 -----
+        userCharacterName: form.userCharacterName.trim() || null,
+        playStyle: form.playStyle || "1v1",
+        replyMode: form.replyMode || "immersive",
+        replyLength:
+          typeof form.replyLength === "number" && form.replyLength > 0
+            ? Math.round(form.replyLength)
+            : 500,
+        dialogueExamples: form.dialogueExamples.trim() || null,
+        scenario: form.scenario.trim() || null,
+        replyEnhancement: form.replyEnhancement || "none",
       };
 
       const url = isEdit ? `/api/characters/${initialData!.id}` : "/api/characters";
@@ -475,7 +521,12 @@ export function CharacterForm({
           <TabsList className="mb-4">
             <TabsTrigger value="basic">基础设定</TabsTrigger>
             <TabsTrigger value="advanced">高级设定</TabsTrigger>
+            <TabsTrigger value="scenario">
+              <Theater className="size-3.5" />
+              场景与示例
+            </TabsTrigger>
             <TabsTrigger value="worldbook">
+              <BookText className="size-3.5" />
               世界书
               {form.worldbook.length > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-primary/15 text-primary px-1.5 text-[10px] tabular-nums">
@@ -497,6 +548,19 @@ export function CharacterForm({
                     placeholder="例如：苏暮雨"
                     value={form.name}
                     onChange={(e) => set("name", e.target.value)}
+                    maxLength={40}
+                  />
+                </Field>
+                <Field
+                  label="用户角色名（非必填）"
+                  htmlFor="userCharacterName"
+                  hint="不会在聊天中展示，但可帮 AI 更好生成对话内容（例如：「我」/「旅行者」/「小明」）"
+                >
+                  <Input
+                    id="userCharacterName"
+                    placeholder="例如：旅行者"
+                    value={form.userCharacterName}
+                    onChange={(e) => set("userCharacterName", e.target.value)}
                     maxLength={40}
                   />
                 </Field>
@@ -656,6 +720,185 @@ export function CharacterForm({
                     nucleus sampling 阈值
                   </p>
                 </div>
+
+                <div className="h-px bg-border" />
+
+                {/* 玩法类型 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">玩法类型</label>
+                    <span className="text-[10px] text-muted-foreground">
+                      决定整体的对话走向
+                    </span>
+                  </div>
+                  <RadioGroup
+                    value={form.playStyle}
+                    onValueChange={(v) => set("playStyle", v)}
+                    options={[
+                      {
+                        value: "1v1",
+                        label: "对手戏 (1v1)",
+                        description: "专注角色间的互动，情感与对话张力。",
+                      },
+                      {
+                        value: "story",
+                        label: "推剧情 (story)",
+                        description: "侧重情节发展与探索，NPC 推进故事。",
+                      },
+                      {
+                        value: "trpg",
+                        label: "文字冒险 / 跑团 (trpg)",
+                        description: "包含检定与选项引导，强调互动。",
+                      },
+                      {
+                        value: "tool",
+                        label: "系统与工具 (tool)",
+                        description: "纯功能性对话，弱化人设。",
+                      },
+                    ]}
+                  />
+                </div>
+
+                {/* 回复模式 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">回复模式</label>
+                    <span className="text-[10px] text-muted-foreground">
+                      决定回复的文风与详略
+                    </span>
+                  </div>
+                  <RadioGroup
+                    value={form.replyMode}
+                    onValueChange={(v) => set("replyMode", v)}
+                    options={[
+                      {
+                        value: "casual",
+                        label: "轻聊天 (casual)",
+                        description: "短平快，纯对话，少描写。",
+                      },
+                      {
+                        value: "immersive",
+                        label: "沉浸式扮演 (immersive)",
+                        description: "丰富的动作与心理描写。",
+                      },
+                      {
+                        value: "narrator",
+                        label: "全知视角 (narrator)",
+                        description: "上帝视角描写环境与事件。",
+                      },
+                    ]}
+                  />
+                </div>
+
+                {/* AI 回复长度 */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">AI 回复长度</label>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {form.replyLength} tokens
+                    </span>
+                  </div>
+                  <Slider
+                    value={[form.replyLength]}
+                    min={100}
+                    max={2000}
+                    step={50}
+                    onValueChange={(v) =>
+                      set("replyLength", Array.isArray(v) ? v[0] : v)
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    越大回复越详细，但消耗的 token 也越多。100 - 2000，步长 50。
+                  </p>
+                </div>
+
+                {/* 回复增强 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">回复增强</label>
+                    <span className="text-[10px] text-muted-foreground">
+                      开启后 AI 会在回复里附带额外信息
+                    </span>
+                  </div>
+                  <RadioGroup
+                    value={form.replyEnhancement}
+                    onValueChange={(v) => set("replyEnhancement", v)}
+                    options={[
+                      {
+                        value: "none",
+                        label: "不开启",
+                        description: "普通文字回复。",
+                      },
+                      {
+                        value: "status",
+                        label: "状态栏",
+                        description: "回复里附带一栏状态（如心情、好感度），随剧情更新。",
+                      },
+                      {
+                        value: "frontend-card",
+                        label: "前端卡",
+                        description: "用自定义模板 + CSS 把回复渲染成卡片，变量随剧情更新。",
+                      },
+                    ]}
+                  />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    「状态栏」和「前端卡」会让 AI 每次回复都按固定格式输出额外字段，
+                    适合喜欢可视化进度的用户。开启后建议在「系统提示词」里补充格式约束。
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="scenario">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Theater className="size-4 text-primary" />
+                  场景与示例
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <Field
+                  label="对话场景"
+                  htmlFor="scenario"
+                  hint="故事发生的初始背景，例如：碰巧在公园遇到小明..."
+                >
+                  <Textarea
+                    id="scenario"
+                    placeholder="例如：你正在校园的樱花树下长椅上看书，苏暮雨忽然向你走来……"
+                    value={form.scenario}
+                    onChange={(e) => set("scenario", e.target.value)}
+                    rows={6}
+                  />
+                </Field>
+
+                <div className="h-px bg-border" />
+
+                <Field
+                  label="对话示例"
+                  htmlFor="dialogueExamples"
+                  hint='极其重要！用于规范 AI 的说话口癖和格式。例如：<user>你好</user>\n<char>（微笑）你好呀！</char>'
+                >
+                  <Textarea
+                    id="dialogueExamples"
+                    placeholder={
+                      "<user>你好</user>\n<char>（微微欠身）你好，旅人。有什么需要我帮忙的吗？</char>\n<user>今天天气真好</user>\n<char>（抬头望向天空）是啊，阳光洒在青石板路上，风里带着花香。</char>"
+                    }
+                    value={form.dialogueExamples}
+                    onChange={(e) =>
+                      set("dialogueExamples", e.target.value)
+                    }
+                    rows={10}
+                    className="font-mono text-xs"
+                  />
+                </Field>
+
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  提示：用 <code className="px-1 rounded bg-muted">&lt;user&gt;</code> 标记用户，
+                  <code className="px-1 rounded bg-muted mx-1">&lt;char&gt;</code> 标记角色。
+                  多写几组示例能让 AI 更快掌握语气和格式。
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
