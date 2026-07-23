@@ -42,13 +42,13 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/<your-name>/inorytavern.git
-cd inorytavern
+git clone https://github.com/Oumainory/InoryTavern.git
+cd InoryTavern
 
 # 2. 安装依赖
 npm install
 
-# 3. 创建 .env（注意：真实密钥绝对不要提交到 Git！）
+# 3. 创建 .env
 cp .env.example .env
 # 然后用编辑器打开 .env，填入你的 OPENAI_API_KEY 和 OPENAI_BASE_URL
 
