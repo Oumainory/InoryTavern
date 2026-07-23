@@ -187,14 +187,14 @@ function serializeVoices(v: Record<string, string>): string {
 
 // 试听台词：8 种语言
 const PREVIEW_TEXTS: Record<string, string> = {
-  zh: "你好，我是你的 InoryTavern 语音。",
+  zh: "你好，我是你的酒馆语音。",
   en: "Hello, I am your tavern voice.",
-  ja: "こんにちは、私はあなたの酒場の声です。",
-  fr: "Bonjour, je suis la voix de votre taverne.",
-  es: "Hola, soy la voz de tu taberna.",
-  it: "Ciao, sono la voce della tua taverna.",
-  pt: "Olá, sou a voz da sua taverna.",
-  hi: "नमस्ते, मैं आपकी सराय की आवाज़ हूँ।",
+  ja: "こんにちは、あなたのタバーン音声です。",
+  fr: "Bonjour, je suis la voix de votre Tavern.",
+  es: "Hola, soy la voz de tu Tavern.",
+  it: "Ciao, sono la voce del tuo Tavern.",
+  pt: "Olá, sou a voz do seu Tavern.",
+  hi: "नमस्ते, मैं आपकी टैवर्न की आवाज़ हूँ।",
 };
 
 export default function SettingsPage() {
