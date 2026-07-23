@@ -15,7 +15,7 @@
 
 - 🚀 **开箱即用**：纯 Node.js 架构，**零 C++ / 原生依赖**。在 Windows、Linux、macOS 上 `npm install && npm run dev` 即可秒级启动，再也不会被 `node-gyp` 折腾。
 - 🧠 **内置 RAG 长期记忆**：无需配置 `pgvector` / `chromadb` 等向量库。系统会在每轮对话后自动抽取记忆入库，下一轮用纯 JS 余弦相似度检索，让 AI 自然地记住你的名字、喜好、剧情走向。
-- 🎙️ **多模型路由 + 角色专属 TTS**：聊天 / 智能捏卡 / 语音朗读 三个场景可独立指定模型；完美集成 Kokoro TTS，支持 8 种语言自动切换（中/英/日/法/西/意/葡/印地）。
+- 🎙️ **多模型路由 + 角色专属 TTS**：聊天 / 智能捏卡 / 语音朗读 三个场景可独立指定模型；**全面兼容 OpenAI TTS 接口规范**，支持自定义 Voice ID 为角色绑定专属音色。*(注：代码层面对 Kokoro TTS 进行了专属优化，若你的 API 提供 Kokoro 模型，可完美支持多语种与音色推导)*
 - ✨ **AI 智能捏卡**：一句话描述，AI 自动生成完整角色设定（人设、世界书、开场白）并填充表单。
 - 📥 **Tavern 角色卡互导**：支持标准 PNG `tEXt(chara)` 规范的导入与导出，可与 SillyTavern / Tavern 等生态互通。
 - 🌗 **现代 WebUI**：Next.js 16 + React 19 + Tailwind 4 + Shadcn base-nova 风格，深色模式原生支持。
@@ -150,8 +150,8 @@ inorytavern/
 **Q：拉取模型列表显示「Unexpected end of JSON input」？**
 A：通常是 `baseUrl` 不正确或上游服务在重启。进入「设置」核对 `API Base URL`，确保末尾无多余 `/`。
 
-**Q：Kokoro 西语试听到法语声音（串台）？**
-A：已在最新版本修复：短句试听时强制通过 `voice` ID 首字母推导 `lang` 参数，绕开文本检测。
+**Q：(仅限 Kokoro API 用户) 西语试听到法语声音（串台）？** 
+A：已在代码层修复：针对 Kokoro 接口，短句试听时会强制通过 `voice` ID 首字母推导 `lang` 参数，精准绕开文本语种误判。
 
 **Q：embedding 调用太慢？**
 A：可在 `.env` 把 `OPENAI_EMBEDDING_MODEL` 改成更小的模型（如 `text-embedding-3-small` → `text-embedding-3-large` 的反向升级通常无意义，前者已经足够）。
