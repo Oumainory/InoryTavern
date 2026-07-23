@@ -106,42 +106,72 @@ npm start
 ## 📁 目录结构
 
 ```
-inorytavern/
-├── app/
-│   ├── api/                  # 后端路由
-│   │   ├── chat/             # 流式对话 + RAG 记忆注入
-│   │   ├── characters/       # 角色 CRUD
-│   │   ├── chats/            # 多对话历史
-│   │   ├── generate-character/# AI 智能捏卡
-│   │   ├── memories/         # 长期记忆管理
-│   │   ├── models/           # 拉取上游模型列表
-│   │   ├── settings/         # 全局配置
-│   │   └── tts/              # 语音合成（含 Kokoro 多语种）
-│   ├── create/               # 创建角色页
-│   ├── edit/[id]/            # 编辑角色页
-│   ├── chat/[characterId]/[chatId]/  # 聊天页
-│   ├── settings/             # 设置页
-│   ├── layout.tsx            # 根布局（顶部导航）
-│   └── page.tsx              # 首页（角色瀑布流）
-├── components/               # 客户端组件
-│   ├── character-card.tsx    # 角色卡（含编辑/导出/删除）
-│   ├── character-form.tsx    # 创角/编辑表单（含 AI 捏卡、PNG 导入）
-│   ├── chat-view.tsx         # Monica 风格聊天视图
-│   ├── chat-workspace.tsx    # 左侧历史 + 右侧聊天布局
-│   ├── memory-manager.tsx    # RAG 长期记忆管理 UI
-│   └── theme-toggle.tsx      # 主题切换
+InoryTavern/
+├── app/                              # Next.js 16 App Router
+│   ├── api/                          # 后端路由（Route Handlers）
+│   │   ├── chat/route.ts             # 流式对话 + RAG 注入 + 思考模型解析
+│   │   ├── characters/               # 角色 CRUD
+│   │   │   ├── route.ts
+│   │   │   └── [id]/
+│   │   │       ├── route.ts
+│   │   │       └── chats/route.ts    # 角色下的对话列表
+│   │   ├── chats/                    # 对话历史管理
+│   │   │   ├── route.ts
+│   │   │   └── [id]/
+│   │   │       ├── route.ts
+│   │   │       └── regenerate/route.ts  # 重新生成 AI 回复
+│   │   ├── generate-character/route.ts  # AI 智能捏卡
+│   │   ├── memories/route.ts         # RAG 长期记忆 CRUD
+│   │   ├── models/route.ts           # 拉取上游模型列表
+│   │   ├── settings/route.ts         # 全局配置（多模型 + TTS）
+│   │   └── tts/route.ts              # 语音合成（OpenAI / Kokoro）
+│   ├── chat/[characterId]/           # 聊天页
+│   │   ├── page.tsx                  # 新对话入口（无 chatId 时重定向）
+│   │   └── [chatId]/page.tsx         # 指定对话的聊天页
+│   ├── create/page.tsx               # 创建角色页
+│   ├── edit/[id]/page.tsx            # 编辑角色页（含记忆管理）
+│   ├── settings/page.tsx             # 全局设置页
+│   ├── layout.tsx                    # 根布局（顶部导航 + 主题）
+│   ├── page.tsx                      # 首页（角色瀑布流）
+│   └── globals.css                   # Tailwind 4 全局样式
+├── components/
+│   ├── ui/                           # Shadcn 基础组件
+│   │   ├── button.tsx                #   按钮
+│   │   ├── card.tsx                  #   卡片容器
+│   │   ├── dialog.tsx                #   弹窗
+│   │   ├── input.tsx                 #   输入框
+│   │   ├── link-button.tsx           #   链接按钮（a 标签）
+│   │   ├── radio-group.tsx           #   单选组（自研轻量版）
+│   │   ├── slider.tsx                #   滑动条
+│   │   ├── switch.tsx                #   开关
+│   │   ├── tabs.tsx                  #   标签页
+│   │   └── textarea.tsx              #   多行文本
+│   ├── character-card.tsx            # 角色卡（含编辑/导出/删除）
+│   ├── character-form.tsx            # 创角/编辑表单（4 Tab + AI 捏卡 + PNG 导入）
+│   ├── chat-view.tsx                 # Monica 风格聊天视图（含思考块折叠）
+│   ├── chat-workspace.tsx            # 左侧历史 + 右侧聊天布局
+│   ├── memory-manager.tsx            # RAG 长期记忆管理 UI
+│   ├── theme-provider.tsx            # next-themes 包装
+│   └── theme-toggle.tsx              # 主题切换按钮
 ├── lib/
-│   ├── prisma.ts             # Prisma 单例
-│   ├── store.ts              # Zustand 状态
-│   ├── types.ts              # 共享类型
-│   ├── utils.ts              # cn() 工具
-│   ├── vector.ts             # ⭐ 纯 JS 向量检索
-│   └── png-utils.ts          # Tavern PNG 角色卡编解码
+│   ├── prisma.ts                     # Prisma 单例
+│   ├── store.ts                      # Zustand 状态（带 persist）
+│   ├── types.ts                      # 共享 TS 类型
+│   ├── utils.ts                      # cn() 工具
+│   ├── vector.ts                     # ⭐ 纯 JS 余弦相似度（零依赖）
+│   └── png-utils.ts                  # Tavern PNG 角色卡 tEXt 编解码
 ├── prisma/
-│   └── schema.prisma         # Character / Chat / Memory / WorldbookEntry / Setting
-├── .env.example              # 环境变量模板
-├── .gitignore                # Git 忽略规则
-└── README.md                 # 你正在看的文件
+│   └── schema.prisma                 # Character / Chat / Memory / WorldbookEntry / Setting
+├── public/                           # 静态资源
+├── .env.example                      # 环境变量模板
+├── .gitignore                        # Git 忽略规则
+├── update.bat                        # Windows 一键更新脚本
+├── update.sh                         # Mac/Linux 一键更新脚本
+├── components.json                   # Shadcn 配置
+├── next.config.ts                    # Next.js 配置
+├── tsconfig.json                     # TypeScript 配置
+├── package.json
+└── README.md                         # 你正在看的文件
 ```
 
 ---

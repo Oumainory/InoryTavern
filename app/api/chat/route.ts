@@ -200,14 +200,16 @@ export async function POST(req: Request) {
     content: systemParts.join("\n\n"),
   };
 
-  // 首条 firstMessage 作为 assistant 的开场白（如果对话历史为空）
+  // 首条 firstMessage 作为 assistant 的开场白（如果历史中没有任何 assistant 回复）
+  // ⚠️ 关键：不能判 messages.length === 0，因为前端 send() 在请求时已经把自己的 user
+  // 消息 push 到 messages 数组里了（消息总数 ≥ 1）。应该判"还没有任何 AI 回复过"。
   const finalMessages: ChatMessage[] = [systemPrompt];
-  if (messages.length === 0 && character.firstMessage) {
+  const hasAssistantBefore = messages.some((m) => m.role === "assistant");
+  if (!hasAssistantBefore && character.firstMessage) {
     finalMessages.push({ role: "assistant", content: character.firstMessage });
-  } else {
-    // 转换为只含 active content 的简单消息发给 AI
-    finalMessages.push(...toActiveMessages(messages));
   }
+  // 转换为只含 active content 的简单消息发给 AI
+  finalMessages.push(...toActiveMessages(messages));
 
   // 异步保存聊天记录（不阻塞流式响应）
   const saveChat = async (assistantContent: string) => {

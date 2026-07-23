@@ -36,24 +36,80 @@ type Segment = { type: "thinking" | "text"; content: string };
 
 function parseThinking(raw: string): Segment[] {
   if (!raw) return [];
-  const segs: Segment[] = [];
-  // 用 lastIndex 循环找 <think> 块
-  const re = /<think>([\s\S]*?)(?:<\/think>|$)/g;
-  let lastEnd = 0;
+  // 思路：扫描所有 <think> / </think> 标记的位置，用状态机走一遍。
+  // 兼容 4 种情况：
+  //   1. <think>...</think>        正常配对（DeepSeek-R1 / QwQ / o1 等）
+  //   2. （思考）</think>          某些模型只写 </think> 不写 <think>（用户当前遇到的）
+  //   3. <think>未闭合（流式中）   暂把到末尾都当 thinking
+  //   4. 多个 思考块 交替出现      都能正确切分
+  type Mark = { pos: number; isOpen: boolean; len: number };
+  const marks: Mark[] = [];
+  const re = /<\/?think>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(raw)) !== null) {
-    const start = m.index;
-    // 思考块前的纯文本
-    if (start > lastEnd) {
-      segs.push({ type: "text", content: raw.slice(lastEnd, start) });
+    marks.push({
+      pos: m.index,
+      isOpen: m[0] === "<think>",
+      len: m[0].length,
+    });
+  }
+
+  // 没有任何 <think> / </think>：整段都是普通文本
+  if (marks.length === 0) {
+    return [{ type: "text", content: raw }];
+  }
+
+  const segs: Segment[] = [];
+  let cursor = 0;
+  let inThinking = false;
+  let thinkStart = 0;
+
+  for (const mark of marks) {
+    if (mark.isOpen) {
+      // <think>
+      if (!inThinking) {
+        // 之前的纯文本
+        if (mark.pos > cursor) {
+          segs.push({ type: "text", content: raw.slice(cursor, mark.pos) });
+        }
+        thinkStart = mark.pos + mark.len;
+        inThinking = true;
+      }
+      // 已处于 thinking 态时再遇到 <think>：忽略（不嵌套）
+    } else {
+      // </think>
+      if (inThinking) {
+        // 正常闭合：把 [thinkStart, mark.pos) 当作 thinking
+        segs.push({
+          type: "thinking",
+          content: raw.slice(thinkStart, mark.pos),
+        });
+        cursor = mark.pos + mark.len;
+        inThinking = false;
+      } else {
+        // ⚠️ 孤儿 </think>：之前没有匹配的 <think>
+        // 把 [cursor, mark.pos) 整段当作 thinking（适配只写闭标签的模型）
+        if (mark.pos > cursor) {
+          segs.push({
+            type: "thinking",
+            content: raw.slice(cursor, mark.pos),
+          });
+        }
+        cursor = mark.pos + mark.len;
+      }
     }
-    segs.push({ type: "thinking", content: m[1] });
-    lastEnd = re.lastIndex;
   }
-  // 思考块后剩余的纯文本
-  if (lastEnd < raw.length) {
-    segs.push({ type: "text", content: raw.slice(lastEnd) });
+
+  // 收尾：剩余的尾巴
+  if (cursor < raw.length) {
+    if (inThinking) {
+      // 未闭合的 <think>：到末尾都是 thinking（流式中常见）
+      segs.push({ type: "thinking", content: raw.slice(thinkStart) });
+    } else {
+      segs.push({ type: "text", content: raw.slice(cursor) });
+    }
   }
+
   return segs;
 }
 
