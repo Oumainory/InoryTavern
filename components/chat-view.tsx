@@ -124,6 +124,43 @@ function summarizeThinking(s: string): string {
   return head.length > 60 ? head.slice(0, 60) + "…" : head;
 }
 
+/**
+ * 构造组件初始的 messages 列表：
+ *   - 给历史消息补 id，并把 swipes 同步到 content
+ *   - 如果对话历史为空且角色有 firstMessage → 把开场白作为一条真实的 assistant 消息插入
+ *     这样开场白就是一条标准的气泡，而不是 UI 占位符：
+ *     ① 后端 AI 能看到这条历史（解决上下文断裂）
+ *     ② 持久化保存到 DB 时，开场白会作为真实消息入库
+ *     ③ 用户点击「重新生成」「编辑」「删除」等操作时和普通消息一样行为一致
+ */
+function seedMessages(
+  initialMessages: ChatMessage[],
+  character: CharacterDTO
+): ChatMessage[] {
+  const mapped = initialMessages.map((m) => {
+    const id = m.id || newId();
+    if (Array.isArray(m.swipes) && m.swipes.length > 0) {
+      return { ...m, id, content: getMessageContent(m) };
+    }
+    return { ...m, id };
+  });
+  if (
+    mapped.length === 0 &&
+    character.firstMessage &&
+    character.firstMessage.trim()
+  ) {
+    return [
+      {
+        id: newId(),
+        role: "assistant" as const,
+        content: character.firstMessage,
+      },
+      ...mapped,
+    ];
+  }
+  return mapped;
+}
+
 export function ChatView({
   character,
   chatId,
@@ -135,18 +172,10 @@ export function ChatView({
   initialMessages: ChatMessage[];
   onMessagesChange?: (msgs: ChatMessage[]) => void;
 }) {
-  // 给历史消息补 id，并把 swipes 数组也用 getMessageContent 同步到 content（保证 content 与 active 同步）
-  const seeded = (() => {
-    return initialMessages.map((m) => {
-      const id = m.id || newId();
-      if (Array.isArray(m.swipes) && m.swipes.length > 0) {
-        return { ...m, id, content: getMessageContent(m) };
-      }
-      return { ...m, id };
-    });
-  })();
-
-  const [messages, setMessages] = useState<ChatMessage[]>(seeded);
+  // 给历史消息补 id（开场白会作为真实消息插入，由 seedMessages 统一处理）
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    seedMessages(initialMessages, character)
+  );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -154,15 +183,7 @@ export function ChatView({
 
   // 切换 chatId 时重置
   useEffect(() => {
-    setMessages(
-      initialMessages.map((m) => {
-        const id = m.id || newId();
-        if (Array.isArray(m.swipes) && m.swipes.length > 0) {
-          return { ...m, id, content: getMessageContent(m) };
-        }
-        return { ...m, id };
-      })
-    );
+    setMessages(seedMessages(initialMessages, character));
     setInput("");
     abortRef.current?.abort();
     setStreaming(false);
@@ -436,17 +457,11 @@ export function ChatView({
         className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
       >
         {messages.length === 0 && (
+          // 开场白已被 seedMessages 提升为真实消息，所以这里只会出现在
+          // 「对话历史为空 + 角色没有 firstMessage」的少见情况下。
           <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
             <div className="text-5xl mb-3">💬</div>
             <p>向 {character.name} 说点什么吧</p>
-            {character.firstMessage && (
-              <div className="mt-4 max-w-md rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
-                <div className="text-xs text-muted-foreground mb-1">
-                  {character.name} 的开场白：
-                </div>
-                {character.firstMessage}
-              </div>
-            )}
           </div>
         )}
         {messages.map((m, i) => {
