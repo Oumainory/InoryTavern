@@ -14,6 +14,7 @@ import {
   Copy,
   Edit2,
   Loader2,
+  Menu,
   RefreshCw,
   Send,
   Square,
@@ -166,11 +167,14 @@ export function ChatView({
   chatId,
   initialMessages,
   onMessagesChange,
+  onOpenChats,
 }: {
   character: CharacterDTO;
   chatId: string;
   initialMessages: ChatMessage[];
   onMessagesChange?: (msgs: ChatMessage[]) => void;
+  /** 移动端点击"菜单"按钮时触发（父组件 ChatWorkspace 用来打开 Sheet） */
+  onOpenChats?: () => void;
 }) {
   // 给历史消息补 id（开场白会作为真实消息插入，由 seedMessages 统一处理）
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
@@ -431,9 +435,24 @@ export function ChatView({
   return (
     <div className="flex h-full flex-col">
       {/* 工具栏 */}
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          {messages.length} 条消息
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2 gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* 移动端：唤起历史会话抽屉的按钮 */}
+          {onOpenChats && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="md:hidden shrink-0"
+              onClick={onOpenChats}
+              aria-label="打开历史会话"
+            >
+              <Menu className="size-4" />
+            </Button>
+          )}
+          <div className="text-sm text-muted-foreground truncate">
+            {messages.length} 条消息
+          </div>
         </div>
         <Button
           variant="ghost"
@@ -445,9 +464,10 @@ export function ChatView({
           }}
           disabled={streaming}
           type="button"
+          className="shrink-0"
         >
           <Trash2 className="size-3.5" />
-          清空对话
+          <span className="hidden sm:inline">清空对话</span>
         </Button>
       </div>
 
@@ -732,7 +752,9 @@ function Bubble({
         {!isEditing && !streaming && (
           <div
             className={cn(
-              "mt-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity",
+              // 移动端：始终可见（无 hover 概念）
+              // 桌面端：默认透明，悬停气泡时显示
+              "mt-1 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity",
               isUser && "flex-row-reverse"
             )}
           >

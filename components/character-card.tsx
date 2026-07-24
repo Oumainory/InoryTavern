@@ -122,8 +122,10 @@ export function CharacterCard({ character }: { character: CharacterDTO }) {
             NSFW
           </span>
         )}
-        {/* 编辑 + 导出 + 删除按钮：右上角悬浮 */}
-        <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
+        {/* 编辑 + 导出 + 删除按钮：右上角悬浮
+            移动端：始终可见（无 hover）
+            桌面端：默认透明，悬停卡片时显示 */}
+        <div className="absolute top-2 left-2 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity">
           <LinkButton
             href={`/edit/${character.id}`}
             variant="default"
