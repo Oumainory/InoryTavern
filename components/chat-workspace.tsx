@@ -180,7 +180,11 @@ export function ChatWorkspace({
                     {c.title}
                   </div>
                   <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    <span>{new Date(c.createdAt).toLocaleString()}</span>
+                    {/* 国际化时间格式在 SSR 和浏览器可能不一致（toLocaleString 依赖 locale），
+                        用 suppressHydrationWarning 抑制警告即可，UI 不会有任何可感知差异 */}
+                    <span suppressHydrationWarning>
+                      {new Date(c.createdAt).toLocaleString()}
+                    </span>
                     <span>·</span>
                     <span>{c.messageCount} 条</span>
                   </div>
